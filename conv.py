@@ -2,7 +2,6 @@ import numpy as np
 import random
 import import_data
 import pyaudio
-import matplotlib.pyplot as plt
 import os
 import wave
 import json
@@ -31,23 +30,6 @@ vocab = [
     'three', 'tree', 'two', 'up', 'visual', 'wow', 'yes', 'zero'
     ]
 
-vocab2 = [
-    'marvin', 'weather', 'time', 'today', 'next', 'lights', 'on', 'off'
-    ]
-
-# 100 most common words in cv-valid-dev
-cvvocab = ['the', 'to', 'and', 'a', 'of', 'i', 'he', 'was', 'you', 'it', 'that', 
-    'in', 'boy', 'had', 'said', 'his', 'is', 'but', 'for', 'with', 'they', 'my', 
-    'about', 'on', 'at', 'me', 'have', 'be', 'were', 'what', 'there', 'as', 'this', 
-    'from', 'one', 'him', "don't", 'all', 'not', 'are', 'so', 'out', 'do', 'your', 
-    'thought', 'we', "i'm", 'know', 'when', 'man', 'them', 'then', 'if', "it's", 
-    'she', 'going', 'alchemist', 'been', 'can', 'people', 'will', 'see', 'an', 
-    'no', 'into', 'get', 'like', 'just', 'up', 'could', 'how', 'their', 'time', 
-    'old', 'her', 'two', 'want', 'who', 'some', 'by', 'back', 'now', 'other', 'or', 
-    'first', 'its', 'came', 'more', 'why', 'very', 'here', "didn't", 'never', 'got', 
-    'desert', 'because', "that's", 'day', 'seemed', 'only']
-
-cvvocab = cvvocab[20:]
 
 # convnet definition
 def create_01_model():
@@ -73,55 +55,10 @@ def create_01_model():
                 metrics=['accuracy'])
     return net
 
-def convmodel():
-    input_shape = (None, 50, 1) # time, frequency bins, channels
-    num_classes = len(cvvocab)
-    net = Sequential()
-    net.add(keras.layers.BatchNormalization(input_shape = input_shape))
-    net.add(Conv2D(filters=128, kernel_size=(20,8), strides=1, activation='relu'))
-    net.add(keras.layers.Dropout(0.1))
-    net.add(MaxPool2D())
-    net.add(Conv2D(filters=128, kernel_size=(10,4), strides=1, activation='relu'))
-    net.add(keras.layers.Dropout(0.1))
-    net.add(MaxPool2D())
-    net.add(Conv2D(filters=256, kernel_size=(10,4), strides=1, activation='relu'))
-    net.add(keras.layers.Dropout(0.1))
-    net.add(MaxPool2D())
-    net.add(keras.layers.GlobalMaxPooling2D())
-    net.add(keras.layers.Dropout(0.4))
-    net.add(Dense(num_classes, activation='sigmoid'))
-    opt = keras.optimizers.Adam(lr=0.001)
-    net.compile(loss=keras.losses.binary_crossentropy,
-                optimizer=opt,
-                weighted_metrics=['accuracy'])
-    return net
 
 ################################################################################
 ##                           TRAINING LOOP                                    ##
 ################################################################################
-def import_partial_dataset(num_samples=100):
-    print("importing dataset")
-    dataset_path = "data_speech_commands_v0.02\\"
-    # an array to hold all the data. Each element is [numpy power array, word identifier]
-    data = []
-    for i in range(len(vocab)):
-        path = dataset_path + vocab[i] + '\\' # folder path for each word
-        files = [path + filename for filename in os.listdir(path)] # list of all filenames for each word
-        samples = random.sample(files, num_samples) # take a random sample of 100 OR num_samples
-        for sample in samples:
-            with wave.open(sample, 'rb') as w:
-                byte_data = w.readframes(w.getnframes())            # Convert to numpy array
-                arr_data = np.frombuffer(byte_data, dtype='<i2')    #
-                if arr_data.shape[0] == 16000:
-                    chunk_data = arr_data.reshape((-1, 160)) # Turn into 10ms chunks
-                    power = np.abs(np.fft.rfft(chunk_data)) ** 2
-                    data.append([power[::,0:50], i])
-    print("shuffling data")
-    random.shuffle(data)
-    print("separating x from y")
-    x = [_[0] for _ in data] # extract power and put in new list x
-    y = [_[1] for _ in data] # extract word identifier and put in new list y
-    return x, y
 
 def load_audio_data(w):
     # takes an open wav file, w, and returns spectrogram
@@ -192,98 +129,6 @@ def import_dataset(split = 0.8, dataset_path = 'dataset\\', shuffle = True, leng
         return train_x, train_y, valid_x, valid_y
     else:
         return x, y, indices
-
-def import_transfer_dataset(split = 0.9, dataset_path = 'transdata\\', json_file_name = 'transdata/2018-10-08-215549.json'):
-    print("importing dataset")
-    #
-    json_data = []
-    with open(json_file_name) as json_file:
-        json_data = json.load(json_file)
-        # Look through all entries and find those which contain the keyword
-        for entry in json_data:
-            if "marvin" in entry["Labels"]:
-                entry["Keyword"] = True
-            else:
-                entry["Keyword"] = False
-    x = []
-    y = []
-    for entry in json_data:
-        filename = dataset_path + entry['Filename']
-        with wave.open(filename, 'rb') as w:
-            if w.getnframes() == 16000 * 5: # only import files of 5 second in length
-                byte_data = w.readframes(w.getnframes())
-                chunk_data = np.frombuffer(byte_data, dtype='<i2').reshape((-1, 160))
-                power = np.abs(np.fft.rfft(chunk_data)) ** 2
-                x.append(power[::,0:50])
-                class_num = len(vocab2)
-                outs = np.zeros(class_num)
-                for i in range(class_num):
-                    if vocab2[i] in entry['Labels']:
-                        outs[i] = 1.0
-                y.append(outs)
-    x = np.array(x)
-    x = np.reshape(x, (x.shape[0], x.shape[1], x.shape[2], 1))
-    y = np.array(y)
-    randstate = np.random.get_state()
-    np.random.shuffle(x)
-    np.random.set_state(randstate)
-    np.random.shuffle(y)
-    split = int(x.shape[0] * split)
-    train_x = x[0:split]
-    train_y = y[0:split]
-    valid_x = x[split:-1]
-    valid_y = y[split:-1]
-    return train_x, train_y, valid_x, valid_y
-
-def save_cv_dataset(dataset_path = 'cv\\cv-valid-dev'):
-    # load the csv
-    csvdata = []
-    with open(dataset_path + '.csv') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            csvdata.append(row)
-    # remove headers
-    csvdata.remove(csvdata[0])
-    num_samples = len(csvdata)
-    length = 1000
-    x = np.zeros((num_samples, length, 50, 1))
-    y = np.zeros((num_samples, len(cvvocab)))
-    for i in range(num_samples):
-        if not i % 100:
-            print(i, 'of', num_samples)
-        row = csvdata[i]
-        filename = 'cv/' + row[0][:-3] + 'wav'
-        for j in range(len(cvvocab)):
-            word = cvvocab[j]
-            if word in row[1]:
-                y[i,j] = 1
-        with wave.open(filename) as w:
-            data = load_audio_data(w)
-            data = data.reshape(data.shape[0], data.shape[1], 1)
-            duration = data.shape[0]
-            if data.shape[0] == length:
-                x[i] = data
-            elif data.shape[0] > length:
-                x[i] = data[0:length] # truncate to fit in array
-            elif data.shape[0] < length:
-                x[i, 0:data.shape[0]] = data # zero pad the end
-    return x,y
-
-def import_cv_dataset(dataset_path = 'cv\\cv-valid-dev', split = 0.9, randomshuffle=False):
-    x = np.load(dataset_path + '-x.npy')
-    y = np.load(dataset_path + '-y.npy')
-    if not randomshuffle:
-        np.random.seed(0) # get reproducible shuffle
-    randstate = np.random.get_state()
-    np.random.shuffle(x)
-    np.random.set_state(randstate)
-    np.random.shuffle(y)
-    split = int(x.shape[0] * split)
-    train_x = x[0:split]
-    train_y = y[0:split]
-    valid_x = x[split:-1]
-    valid_y = y[split:-1]
-    return train_x, train_y, valid_x, valid_y
 
 def import_commands(dataset_path = 'commands/'):
     length = 300 # pad to 3 seconds
@@ -441,7 +286,6 @@ def stream():
     audio = deque(maxlen=5 * 16000)                 # store 5 seconds of audio
     data = np.zeros((1, window, 50, 1))
     while True:                                     # loop forever, grabbing chunks, analyzing, printing output
-        time1 = time.time()
         data = np.roll(data, -stride, axis=1)               # push the old data out of the queue
         audio_data = stream.read(chunk_size)
         audio.extend(audio_data)                    # store the audio for saving later
@@ -454,6 +298,6 @@ def stream():
         if distance.max() > 1:
             print(command_list[distance.argmax()])
             if distance.argmax() == 0:
-                b.lights[0].brightness = 0
+                b.lights[0].on = False
             if distance.argmax() == 1:
-                b.lights[0].brightness = 100
+                b.lights[0].on = True
