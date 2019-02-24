@@ -4,10 +4,15 @@ import os
 import wave
 from phue import Bridge
 from collections import deque
+import sys
 
 import keras
 from keras.layers import Dense
 
+
+command_path = 'commands/'
+if sys.platform == 'linux':
+    command_path = '/media/usb0'
 
 def load_audio_data(w):
     # takes an open wav file, w, and returns spectrogram
@@ -87,7 +92,7 @@ def import_commands(dataset_path = 'commands/'):
     return x,y, command_list
 
 
-x, y, command_list = import_commands()
+x, y, command_list = import_commands(command_path)
 
 net = keras.models.load_model('1550788585.h5')
 encoder = keras.models.Model(inputs = net.inputs, outputs = net.layers[-3].output)
