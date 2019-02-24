@@ -104,4 +104,5 @@ classifier.set_weights(weights)
 
 b = Bridge('192.168.0.12')
 
+print('Beginning listening...')
 stream()
