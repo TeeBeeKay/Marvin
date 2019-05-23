@@ -32,18 +32,18 @@ vocab = [
 
 
 # convnet definition
-def create_01_model():
+def create_01_model(shape = [64,64,256]):
     input_shape = (None, 50, 1) # time, frequency bins, channels
     num_classes = len(vocab)
     net = Sequential()
     net.add(keras.layers.BatchNormalization(input_shape = input_shape))
-    net.add(Conv2D(filters=64, kernel_size=(20,8), strides=1, activation='relu'))
+    net.add(Conv2D(filters=shape[0], kernel_size=(20,8), strides=1, activation='relu'))
     net.add(keras.layers.Dropout(0.1))
     net.add(MaxPool2D())
-    net.add(Conv2D(filters=64, kernel_size=(10,4), strides=1, activation='relu'))
+    net.add(Conv2D(filters=shape[1], kernel_size=(10,4), strides=1, activation='relu'))
     net.add(keras.layers.Dropout(0.1))
     net.add(MaxPool2D())
-    net.add(Conv2D(filters=256, kernel_size=(10,4), strides=1, activation='relu'))
+    net.add(Conv2D(filters=shape[2], kernel_size=(10,4), strides=1, activation='relu'))
     net.add(keras.layers.Dropout(0.1))
     net.add(MaxPool2D())
     net.add(keras.layers.GlobalMaxPooling2D())
@@ -160,7 +160,7 @@ def import_commands(dataset_path = 'commands/'):
 
 """
 # import data and process it
-train_x, train_y, valid_x, valid_y = import_dataset(length=200, extra_words = ['lights off', 'lights on', 'weather'])
+train_x, train_y, valid_x, valid_y = import_dataset(length=150, extra_words = ['lights', 'weather'])
 net = create_01_model()
 class_weights = 1/train_y.sum(0)
 net.pop()
@@ -264,7 +264,7 @@ def interactive_test():
     distance = np.zeros(len(command_list))
     for i in range(len(command_list)):
         distance[i] = np.mean(result[labels == i])
-    return distance
+    #return distance
     return words
     
     result = net.predict(chunk)

@@ -12,7 +12,7 @@ from keras.layers import Dense
 
 command_path = 'commands/'
 if sys.platform == 'linux':
-    command_path = '/media/usb/commands'
+    command_path = '/media/usb/commands/'
 
 def load_audio_data(w):
     # takes an open wav file, w, and returns spectrogram
