@@ -125,7 +125,16 @@ def import_commands(dataset_path = 'commands/'):
 
 
 train_x, train_y, valid_x, valid_y = import_dataset(length=120)
-net = create_01_model(num_classes=train_y.shape[1])
+#net = create_01_model(num_classes=train_y.shape[1])
+net = create_01_model(shape=[32,32,128], num_classes=train_y.shape[1])
+
+#normalise
+for i in range(len(train_x)):
+    train_x[i] = train_x[i]/train_x[i].max()
+
+for i in range(len(valid_x)):
+    valid_x[i] = valid_x[i]/valid_x[i].max()
+
 
 batch_size = 600
 epochs = 100

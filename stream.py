@@ -52,7 +52,7 @@ def stream(window=100, stride = 50):
         audio.extend(audio_data)                    # store the audio for saving later
         chunk = preprocess(audio_data, chunk_size)
         data[:,-stride:] = chunk                    # fill the final stride with data
-        result = classifier.predict(data)[0]
+        result = classifier.predict(data/data.max())[0]
         distance = np.zeros(len(command_list))
         for j in range(len(command_list)):
             distance[j] = np.mean(result[labels == j])
@@ -93,8 +93,10 @@ def import_commands(dataset_path = 'commands/'):
 
 
 x, y, command_list = import_commands(command_path)
-
-net = keras.models.load_model('1550788585.h5')
+for i in range(len(x)):
+    x[i] = x[i]/x[i].max()
+#net = keras.models.load_model('1550788585.h5')
+net = keras.models.load_model('1559497372.h5')
 encoder = keras.models.Model(inputs = net.inputs, outputs = net.layers[-3].output)
 encoded_data = encoder.predict(x).T # transpose the axes
 encoded_data = encoded_data / np.linalg.norm(encoded_data + 1e-9, axis=0) # normalise
