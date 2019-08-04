@@ -22,17 +22,16 @@ vocab = [
 
 # convnet definition
 def create_01_model(shape = [32,32,256], num_classes = 38):
-    input_shape = (None, 50, 1) # time, frequency bins, channels
+    input_shape = (None, 13, 1) # time, frequency bins, channels
     net = Sequential()
     net.add(keras.layers.BatchNormalization(input_shape = input_shape))
     net.add(keras.layers.GaussianNoise(0.1))
-    net.add(Conv2D(filters=shape[0], kernel_size=(20,8), strides=1, activation='relu'))
+    net.add(Conv2D(filters=shape[0], kernel_size=(20,4), strides=1, activation='relu'))
     net.add(keras.layers.Dropout(0.1))
     net.add(MaxPool2D())
-    net.add(Conv2D(filters=shape[1], kernel_size=(10,4), strides=1, activation='relu'))
+    net.add(Conv2D(filters=shape[1], kernel_size=(10,2), strides=1, activation='relu'))
     net.add(keras.layers.Dropout(0.1))
-    net.add(MaxPool2D())
-    net.add(Conv2D(filters=shape[2], kernel_size=(10,4), strides=1, activation='relu'))
+    net.add(Conv2D(filters=shape[2], kernel_size=(10,2), strides=1, activation='relu'))
     net.add(keras.layers.Dropout(0.1))
     net.add(MaxPool2D())
     net.add(keras.layers.GlobalMaxPooling2D())
@@ -45,23 +44,10 @@ def create_01_model(shape = [32,32,256], num_classes = 38):
     return net
 
 
-
-def load_audio_data(w):
-    # takes an open wav file, w, and returns spectrogram
-    byte_data = w.readframes(w.getnframes())
-    chunk_data = np.frombuffer(byte_data, dtype='<i2')
-    # truncate to nearest 10ms and then separate into 10ms chunks
-    chunk_data = chunk_data[0:chunk_data.shape[0]//160*160].reshape((-1, 160))
-    power = np.abs(np.fft.rfft(chunk_data)) ** 2
-    return power[::,0:50]
-
-
-def import_dataset(split = 0.8, dataset_path = 'dataset\\', length = 120):
+def import_dataset(split = 0.8, dataset_path = 'mfcc\\dataset\\', length = 100):
     words = vocab
-    x = np.zeros((100000,length,50))
+    x = np.zeros((100000,length,13,1))
     y = []
-    extra_x, extra_y = import_commands()
-    extra_y = extra_y.argmax(1) + len(words) - 1
     index = 0
     indices = []
     for i in range(0, len(words)):
@@ -75,9 +61,7 @@ def import_dataset(split = 0.8, dataset_path = 'dataset\\', length = 120):
         index = new_index
         y.extend([float(i)] * data.shape[0])
         indices.append(index)
-    x[index:index+extra_x.shape[0]] = extra_x[:,0:length,:,0]
-    y.extend(extra_y)
-    y = to_categorical(np.array(y), num_classes=extra_y.max()+1)
+    y = to_categorical(np.array(y), num_classes=len(words))
     x = x[0:y.shape[0]]
     x = np.reshape(x, (x.shape[0], x.shape[1], x.shape[2], 1)) # add extra channels dimension
     ## Shuffle data
@@ -126,17 +110,18 @@ def import_commands(dataset_path = 'commands/'):
 
 train_x, train_y, valid_x, valid_y = import_dataset(length=120)
 #net = create_01_model(num_classes=train_y.shape[1])
-net = create_01_model(shape=[32,32,128], num_classes=train_y.shape[1])
+net = create_01_model(shape=[16,16,64], num_classes=train_y.shape[1])
 
+"""
 #normalise
 for i in range(len(train_x)):
     train_x[i] = train_x[i]/train_x[i].max()
 
 for i in range(len(valid_x)):
     valid_x[i] = valid_x[i]/valid_x[i].max()
+"""
 
-
-batch_size = 600
+batch_size = 2000
 epochs = 100
 cw = 1/train_y.sum(0)
 

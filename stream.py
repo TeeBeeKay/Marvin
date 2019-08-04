@@ -5,6 +5,9 @@ import wave
 from phue import Bridge
 from collections import deque
 import sys
+from python_speech_features import mfcc
+import matplotlib.pyplot as plt
+import time
 
 import keras
 from keras.layers import Dense
@@ -17,11 +20,8 @@ if sys.platform == 'linux':
 def load_audio_data(w):
     # takes an open wav file, w, and returns spectrogram
     byte_data = w.readframes(w.getnframes())
-    chunk_data = np.frombuffer(byte_data, dtype='<i2')
-    # truncate to nearest 10ms and then separate into 10ms chunks
-    chunk_data = chunk_data[0:chunk_data.shape[0]//160*160].reshape((-1, 160))
-    power = np.abs(np.fft.rfft(chunk_data)) ** 2
-    return power[::,0:50]
+    data = np.frombuffer(byte_data, dtype='<i2')
+    return mfcc(data)
 
 
 def preprocess(data, chunk_size):
@@ -32,8 +32,8 @@ def preprocess(data, chunk_size):
     chunk = chunk[::,0:50].reshape(1, -1, 50, 1)
     return chunk
 
-
-def stream(window=100, stride = 50):
+audio = deque(maxlen=16000)
+def stream(window=1, stride = 50):
     psession = pyaudio.PyAudio()
     stream = psession.open(format = pyaudio.paInt16,
                             channels = 1,
@@ -41,36 +41,51 @@ def stream(window=100, stride = 50):
                             input = True,
                             frames_per_buffer = 16000
     )
-    window = 100
-    stride = 50
     chunk_size = stride * 160                       # 160 represents 10ms
-    audio = deque(maxlen=5 * 16000)                 # store 5 seconds of audio
-    data = np.zeros((1, window, 50, 1))
+    audio_data = stream.read(16000)            # fill audio buffer
+    audio_array = np.fromstring(audio_data, np.int16)
+    audio.extend(audio_array)
     while True:                                     # loop forever, grabbing chunks, analyzing, printing output
-        data = np.roll(data, -stride, axis=1)               # push the old data out of the queue
         audio_data = stream.read(chunk_size)
-        audio.extend(audio_data)                    # store the audio for saving later
-        chunk = preprocess(audio_data, chunk_size)
-        data[:,-stride:] = chunk                    # fill the final stride with data
-        result = classifier.predict(data/data.max())[0]
-        distance = np.zeros(len(command_list))
+        audio_array = np.fromstring(audio_data, np.int16)
+        audio.extend(audio_array)
+        data = mfcc(np.array(audio))
+        data = np.reshape(data, (1, data.shape[0], data.shape[1], 1))
+        result = encoder.predict(data)[0]
+        distance = euclidean(result, centroid)
+        origin = np.zeros((1, result.shape[0]))
+        dto = euclidean(result, origin)
+        normalised_distance = distance/cto
+        print(np.around(normalised_distance, decimals=2))
+        score = normalised_distance - dtc
+        if(score.min() < 0):
+            print(command_list[score.argmin()])
+        """
+        distance = euclidean(result, encoded_data)
+        top_results = distance.argsort()
+        print(labels[top_results[0:5]])
+        class_distance = np.zeros(len(command_list))
         for j in range(len(command_list)):
-            distance[j] = np.mean(result[labels == j])
-        if distance.max() > 1:
-            print(command_list[distance.argmax()])
-            if distance.argmax() == 0:
+            class_distance[j] = np.mean(distance[labels == j])
+        if class_distance.min() < 30:
+            print(class_distance)
+            print(command_list[class_distance.argmin()])
+            if class_distance.argmin() == 0:
                 b.lights[0].on = False
-            if distance.argmax() == 1:
+            if class_distance.argmin() == 1:
                 b.lights[0].on = True
+        else:
+            print(class_distance)
+        """
 
 
 def import_commands(dataset_path = 'commands/'):
-    length = 300 # pad to 3 seconds
+    length = 100 # pad to 3 seconds
     command_list = os.listdir(dataset_path)
     command_index = 0
     i = 0
     num_samples = 2000
-    x = np.zeros((num_samples, length, 50, 1))
+    x = np.zeros((num_samples, length, 13, 1))
     y = np.zeros((num_samples, len(command_list)))
     for command in command_list:
         files = [dataset_path + command + '/' + filename for filename in os.listdir(dataset_path + command)]
@@ -93,21 +108,31 @@ def import_commands(dataset_path = 'commands/'):
 
 
 x, y, command_list = import_commands(command_path)
-for i in range(len(x)):
-    x[i] = x[i]/x[i].max()
+
 #net = keras.models.load_model('1550788585.h5')
-net = keras.models.load_model('1559497372.h5')
+net = keras.models.load_model('1559757989.h5')
 encoder = keras.models.Model(inputs = net.inputs, outputs = net.layers[-3].output)
-encoded_data = encoder.predict(x).T # transpose the axes
-encoded_data = encoded_data / np.linalg.norm(encoded_data + 1e-9, axis=0) # normalise
+encoded_data = encoder.predict(x)
 labels = y.argmax(1)
 
-# cosine similarity network
-nearest_neighbour = Dense(units = labels.shape[0], activation='linear', use_bias=False)(encoder.output)
-classifier = keras.models.Model(inputs=encoder.input, outputs=nearest_neighbour)
-weights = classifier.get_weights()
-weights[-1] = encoded_data
-classifier.set_weights(weights)
+# euclidean distance
+def euclidean(query, dataset):
+    distance = np.sqrt((dataset - query)**2)
+    return distance.sum(1)
+
+# find the centroid of each class
+centroid = np.zeros((len(command_list), encoded_data.shape[1]))
+for i in range(centroid.shape[0]):
+    centroid[i] = np.mean(encoded_data[labels == i], axis=0)
+
+# find the distance to origin for each centroid
+cto = euclidean(np.zeros(centroid.shape[1]), centroid)
+
+# find the average distance to centroid for each class
+dtc = np.zeros(len(command_list))
+for i in range(dtc.shape[0]):
+    dtc[i] = np.mean(euclidean(centroid[i], encoded_data[labels == i]), axis=0)
+dtc /= cto
 
 b = Bridge('192.168.0.12')
 
